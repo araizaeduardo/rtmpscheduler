@@ -74,6 +74,10 @@ backups/
 migrations/__pycache__/
 migrations/versions/__pycache__/
 
+# Video uploads
+uploads/
+videos/
+
 # SQLite database
 *.db
 *.db-journal

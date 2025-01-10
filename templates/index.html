@@ -305,32 +305,54 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Nuevo Stream</h5>
+                    <h5 class="modal-title">Agregar Nuevo Stream</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <form id="addStreamForm">
                         <div class="mb-3">
-                            <label class="form-label">Nombre</label>
-                            <input type="text" class="form-control" id="streamName" required>
+                            <label for="name" class="form-label">Nombre</label>
+                            <input type="text" class="form-control" id="name" required>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Ruta de entrada</label>
-                            <input type="text" class="form-control" id="inputPath" required>
+                            <label for="video" class="form-label">Archivo de Video</label>
+                            <input type="file" class="form-control" id="video" accept="video/*">
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">URL RTMP</label>
-                            <input type="text" class="form-control" id="outputRtmp" required>
+                            <label for="input_path" class="form-label">Ruta de Entrada (opcional si sube archivo)</label>
+                            <input type="text" class="form-control" id="input_path">
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Fecha y hora</label>
-                            <input type="datetime-local" class="form-control" id="scheduledTime" required>
+                            <label for="output_rtmp" class="form-label">URL RTMP</label>
+                            <input type="text" class="form-control" id="output_rtmp" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="scheduled_time" class="form-label">Hora Programada</label>
+                            <input type="datetime-local" class="form-control" id="scheduled_time" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="video_params" class="form-label">Parámetros de Video</label>
+                            <input type="text" class="form-control" id="video_params" 
+                                   placeholder="-c:v copy -c:a aac -f flv"
+                                   title="Parámetros para ffmpeg (ej: -c:v copy -c:a aac -f flv)">
+                            <small class="form-text text-muted">
+                                Parámetros para ffmpeg. Por defecto: -c:v copy -c:a aac -f flv
+                            </small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="max_plays" class="form-label">Número Máximo de Reproducciones</label>
+                            <input type="number" class="form-control" id="max_plays" 
+                                   value="0" min="0"
+                                   title="0 para reproducciones ilimitadas">
+                            <small class="form-text text-muted">
+                                Número máximo de veces que se reproducirá (0 = sin límite)
+                            </small>
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" onclick="addStream()">Guardar</button>
+                    <button type="button" class="btn btn-primary" onclick="addStream()">Agregar</button>
                 </div>
             </div>
         </div>
@@ -346,28 +368,52 @@
                 </div>
                 <div class="modal-body">
                     <form id="editStreamForm">
-                        <input type="hidden" id="editStreamId">
+                        <input type="hidden" id="edit_stream_id">
                         <div class="mb-3">
-                            <label class="form-label">Nombre</label>
-                            <input type="text" class="form-control" id="editStreamName" required>
+                            <label for="edit_name" class="form-label">Nombre</label>
+                            <input type="text" class="form-control" id="edit_name" required>
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Ruta de entrada</label>
-                            <input type="text" class="form-control" id="editInputPath" required>
+                            <label for="edit_video" class="form-label">Nuevo Video (opcional)</label>
+                            <input type="file" class="form-control" id="edit_video" accept="video/*">
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">URL RTMP</label>
-                            <input type="text" class="form-control" id="editOutputRtmp" required>
+                            <label for="edit_input_path" class="form-label">Ruta de Entrada</label>
+                            <input type="text" class="form-control" id="edit_input_path">
                         </div>
                         <div class="mb-3">
-                            <label class="form-label">Fecha y hora</label>
-                            <input type="datetime-local" class="form-control" id="editScheduledTime" required>
+                            <label for="edit_output_rtmp" class="form-label">URL RTMP</label>
+                            <input type="text" class="form-control" id="edit_output_rtmp" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit_scheduled_time" class="form-label">Hora Programada</label>
+                            <input type="datetime-local" class="form-control" id="edit_scheduled_time" required>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit_video_params" class="form-label">Parámetros de Video</label>
+                            <input type="text" class="form-control" id="edit_video_params" 
+                                   placeholder="-c:v copy -c:a aac -f flv"
+                                   title="Parámetros para ffmpeg (ej: -c:v copy -c:a aac -f flv)">
+                            <small class="form-text text-muted">
+                                Parámetros para ffmpeg. Por defecto: -c:v copy -c:a aac -f flv
+                            </small>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit_max_plays" class="form-label">Número Máximo de Reproducciones</label>
+                            <input type="number" class="form-control" id="edit_max_plays" 
+                                   min="0"
+                                   title="0 para reproducciones ilimitadas">
+                            <small class="form-text text-muted">
+                                Número máximo de veces que se reproducirá (0 = sin límite)
+                                <br>
+                                Reproducciones actuales: <span id="edit_play_count">0</span>
+                            </small>
                         </div>
                     </form>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" onclick="updateStream()">Actualizar</button>
+                    <button type="button" class="btn btn-primary" onclick="updateStream()">Guardar</button>
                 </div>
             </div>
         </div>
@@ -376,31 +422,44 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         function addStream() {
-            const data = {
-                name: document.getElementById('streamName').value,
-                input_path: document.getElementById('inputPath').value,
-                output_rtmp: document.getElementById('outputRtmp').value,
-                scheduled_time: document.getElementById('scheduledTime').value
-            };
-
+            const formData = new FormData();
+            formData.append('name', document.getElementById('name').value);
+            formData.append('output_rtmp', document.getElementById('output_rtmp').value);
+            formData.append('scheduled_time', document.getElementById('scheduled_time').value);
+            
+            const videoFile = document.getElementById('video').files[0];
+            if (videoFile) {
+                formData.append('video', videoFile);
+            } else {
+                const inputPath = document.getElementById('input_path').value;
+                if (inputPath) {
+                    formData.append('input_path', inputPath);
+                }
+            }
+            
+            const videoParams = document.getElementById('video_params').value;
+            if (videoParams) {
+                formData.append('video_params', videoParams);
+            }
+            
+            const maxPlays = document.getElementById('max_plays').value;
+            formData.append('max_plays', maxPlays);
+            
             fetch('/add_stream', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(data)
+                body: formData
             })
             .then(response => response.json())
             .then(data => {
-                if (data.status === 'success') {
-                    location.reload();
+                if (data.error) {
+                    alert(data.error);
                 } else {
-                    alert('Error: ' + data.message);
+                    location.reload();
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Error al agregar el stream');
+                alert('Error al agregar stream');
             });
         }
 
@@ -427,43 +486,59 @@
         function editStream(streamId) {
             fetch(`/edit_stream/${streamId}`)
             .then(response => response.json())
-            .then(data => {
-                document.getElementById('editStreamId').value = data.id;
-                document.getElementById('editStreamName').value = data.name;
-                document.getElementById('editInputPath').value = data.input_path;
-                document.getElementById('editOutputRtmp').value = data.output_rtmp;
-                document.getElementById('editScheduledTime').value = data.scheduled_time.slice(0, 16);
-                new bootstrap.Modal(document.getElementById('editStreamModal')).show();
+            .then(stream => {
+                document.getElementById('edit_stream_id').value = stream.id;
+                document.getElementById('edit_name').value = stream.name;
+                document.getElementById('edit_input_path').value = stream.input_path;
+                document.getElementById('edit_output_rtmp').value = stream.output_rtmp;
+                document.getElementById('edit_scheduled_time').value = stream.scheduled_time.slice(0, 16);
+                document.getElementById('edit_video_params').value = stream.video_params;
+                document.getElementById('edit_max_plays').value = stream.max_plays;
+                document.getElementById('edit_play_count').textContent = stream.play_count;
+                
+                const editModal = new bootstrap.Modal(document.getElementById('editStreamModal'));
+                editModal.show();
             });
         }
 
         function updateStream() {
-            const streamId = document.getElementById('editStreamId').value;
-            const data = {
-                name: document.getElementById('editStreamName').value,
-                input_path: document.getElementById('editInputPath').value,
-                output_rtmp: document.getElementById('editOutputRtmp').value,
-                scheduled_time: document.getElementById('editScheduledTime').value
-            };
-
+            const streamId = document.getElementById('edit_stream_id').value;
+            const formData = new FormData();
+            
+            formData.append('name', document.getElementById('edit_name').value);
+            formData.append('output_rtmp', document.getElementById('edit_output_rtmp').value);
+            formData.append('scheduled_time', document.getElementById('edit_scheduled_time').value);
+            
+            const videoFile = document.getElementById('edit_video').files[0];
+            if (videoFile) {
+                formData.append('video', videoFile);
+            } else {
+                formData.append('input_path', document.getElementById('edit_input_path').value);
+            }
+            
+            const videoParams = document.getElementById('edit_video_params').value;
+            if (videoParams) {
+                formData.append('video_params', videoParams);
+            }
+            
+            const maxPlays = document.getElementById('edit_max_plays').value;
+            formData.append('max_plays', maxPlays);
+            
             fetch(`/edit_stream/${streamId}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(data)
+                method: 'PUT',
+                body: formData
             })
             .then(response => response.json())
             .then(data => {
-                if (data.status === 'success' || data.message === 'Stream updated successfully') {
-                    location.reload();
+                if (data.error) {
+                    alert(data.error);
                 } else {
-                    alert('Error: ' + data.message);
+                    location.reload();
                 }
             })
             .catch(error => {
                 console.error('Error:', error);
-                alert('Error al actualizar el stream');
+                alert('Error al actualizar stream');
             });
         }
 
@@ -504,13 +579,13 @@
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    showAlert('success', 'Backup created successfully');
+                    alert('Backup created successfully');
                 } else {
-                    showAlert('danger', 'Error creating backup: ' + data.message);
+                    alert('Error creating backup: ' + data.message);
                 }
             })
             .catch(error => {
-                showAlert('danger', 'Error creating backup: ' + error);
+                alert('Error creating backup: ' + error);
             });
         }
         
