@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream Manager Pro</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #34495e;
+            --accent-color: #3498db;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --danger-color: #e74c3c;
+        }
+
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+
+        .navbar {
+            background-color: var(--primary-color);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .navbar-brand {
+            color: white !important;
+            font-weight: 600;
+            font-size: 1.5rem;
+        }
+
+        .page-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 3rem 0;
+            margin-bottom: 2rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .stream-card {
+            transition: all 0.3s ease;
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            background: white;
+            height: 100%;
+            position: relative;
+        }
+
+        .stream-card.inactive {
+            opacity: 0.7;
+        }
+        
+        .stream-card.inactive .card-body {
+            position: relative;
+        }
+        
+        .stream-card.inactive .card-body::after {
+            content: 'DISABLED';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-30deg);
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--danger-color);
+            border: 3px solid var(--danger-color);
+            padding: 0.5rem 2rem;
+            border-radius: 10px;
+            opacity: 0.8;
+            pointer-events: none;
+        }
+
+        .stream-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+        }
+
+        .card-body {
+            padding: 1.5rem;
+        }
+
+        .status-badge {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-weight: 500;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .play-info {
+            font-size: 0.85rem;
+            color: #666;
+            padding: 0.5rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-top: 1rem;
+        }
+
+        .play-badge {
+            position: absolute;
+            top: 3rem;
+            right: 1rem;
+            background: var(--accent-color);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 50px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .play-count {
+            font-weight: 600;
+            color: var(--accent-color);
+        }
+
+        .btn-primary {
+            background-color: var(--accent-color);
+            border: none;
+            padding: 0.5rem 1.5rem;
+            border-radius: 50px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background-color: #2980b9;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+        }
+
+        .btn-danger {
+            background-color: var(--danger-color);
+            border: none;
+            padding: 0.5rem 1.5rem;
+            border-radius: 50px;
+            font-weight: 500;
+        }
+
+        .modal-content {
+            border-radius: 12px;
+            border: none;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            border-radius: 12px 12px 0 0;
+            padding: 1.5rem;
+        }
+
+        .modal-title {
+            font-weight: 600;
+        }
+
+        .form-control {
+            border-radius: 8px;
+            padding: 0.8rem 1rem;
+            border: 1px solid #e1e1e1;
+        }
+
+        .form-control:focus {
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.25);
+            border-color: var(--accent-color);
+        }
+
+        .stream-info {
+            background-color: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+        }
+
+        .btn-toggle {
+            background-color: var(--warning-color);
+            border: none;
+            padding: 0.5rem 1.5rem;
+            border-radius: 50px;
+            font-weight: 500;
+            color: white;
+        }
+
+        .btn-toggle:hover {
+            background-color: #e67e22;
+            color: white;
+        }
+
+        .btn-toggle.active {
+            background-color: var(--success-color);
+        }
+
+        .btn-toggle.active:hover {
+            background-color: #219a52;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
+        <div class="container">
+            <a class="navbar-brand" href="#">
+                <i class="fas fa-video me-2"></i>
+                Stream Manager Pro
+            </a>
+        </div>
+    </nav>
+
+    <!-- Page Header -->
+    <div class="page-header">
+        <div class="container">
+            <h1>Gestión de Streams</h1>
+            <p class="lead">Administra y programa tus transmisiones en vivo</p>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container mt-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Stream Manager Pro</h1>
+            <div>
+                <button type="button" class="btn btn-success me-2" onclick="createBackup()">
+                    <i class="fas fa-save"></i> Create Backup
+                </button>
+                <button type="button" class="btn btn-primary" onclick="showAddStreamModal()">
+                    <i class="fas fa-plus"></i> Add Stream
+                </button>
+            </div>
+        </div>
+
+        <!-- Stream Cards -->
+        <div class="row g-4">
+            {% for stream in streams %}
+            <div class="col-md-6 col-lg-4">
+                <div class="stream-card {{ 'inactive' if not stream.is_active }}">
+                    <div class="card-body">
+                        <span class="status-badge badge bg-{{ 'success' if stream.status == 'completed' else 'warning' if stream.status == 'scheduled' else 'danger' }}">
+                            <i class="fas fa-{{ 'check' if stream.status == 'completed' else 'clock' if stream.status == 'scheduled' else 'exclamation-triangle' }} me-1"></i>
+                            {{ stream.status }}
+                        </span>
+                        {% if stream.play_count > 0 %}
+                        <span class="play-badge">
+                            <i class="fas fa-play me-1"></i>
+                            {{ stream.play_count }} reproducción{{ 'es' if stream.play_count != 1 }}
+                        </span>
+                        {% endif %}
+                        <h5 class="card-title mb-3">{{ stream.name }}</h5>
+                        <div class="stream-info">
+                            <p class="mb-2">
+                                <i class="fas fa-calendar-alt me-2"></i>
+                                {{ stream.scheduled_time.strftime('%Y-%m-%d %H:%M') }}
+                            </p>
+                            <p class="mb-2">
+                                <i class="fas fa-folder-open me-2"></i>
+                                {{ stream.input_path }}
+                            </p>
+                            <p class="mb-0">
+                                <i class="fas fa-link me-2"></i>
+                                {{ stream.output_rtmp }}
+                            </p>
+                        </div>
+                        {% if stream.last_played %}
+                        <div class="play-info">
+                            <p class="mb-1">
+                                <i class="fas fa-history me-2"></i>
+                                Última reproducción:
+                            </p>
+                            <p class="mb-0">
+                                {{ stream.last_played.strftime('%Y-%m-%d %H:%M:%S') }}
+                            </p>
+                        </div>
+                        {% endif %}
+                        <div class="d-flex justify-content-between align-items-center mt-3">
+                            <button 
+                                class="btn btn-toggle {{ 'active' if stream.is_active }}"
+                                onclick="toggleStream({{ stream.id }}, this)"
+                            >
+                                {{ 'Activado' if stream.is_active else 'Desactivado' }}
+                            </button>
+                            <div>
+                                <button class="btn btn-primary" onclick="editStream({{ stream.id }})">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <button class="btn btn-danger ms-2" onclick="deleteStream({{ stream.id }})">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Add Stream Modal -->
+    <div class="modal fade" id="addStreamModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Nuevo Stream</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="addStreamForm">
+                        <div class="mb-3">
+                            <label class="form-label">Nombre</label>
+                            <input type="text" class="form-control" id="streamName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Ruta de entrada</label>
+                            <input type="text" class="form-control" id="inputPath" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">URL RTMP</label>
+                            <input type="text" class="form-control" id="outputRtmp" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Fecha y hora</label>
+                            <input type="datetime-local" class="form-control" id="scheduledTime" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="addStream()">Guardar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Stream Modal -->
+    <div class="modal fade" id="editStreamModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Editar Stream</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="editStreamForm">
+                        <input type="hidden" id="editStreamId">
+                        <div class="mb-3">
+                            <label class="form-label">Nombre</label>
+                            <input type="text" class="form-control" id="editStreamName" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Ruta de entrada</label>
+                            <input type="text" class="form-control" id="editInputPath" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">URL RTMP</label>
+                            <input type="text" class="form-control" id="editOutputRtmp" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Fecha y hora</label>
+                            <input type="datetime-local" class="form-control" id="editScheduledTime" required>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-primary" onclick="updateStream()">Actualizar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function addStream() {
+            const data = {
+                name: document.getElementById('streamName').value,
+                input_path: document.getElementById('inputPath').value,
+                output_rtmp: document.getElementById('outputRtmp').value,
+                scheduled_time: document.getElementById('scheduledTime').value
+            };
+
+            fetch('/add_stream', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error al agregar el stream');
+            });
+        }
+
+        function deleteStream(streamId) {
+            if (confirm('¿Estás seguro de que quieres eliminar este stream?')) {
+                fetch(`/delete_stream/${streamId}`, {
+                    method: 'DELETE'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error al eliminar el stream');
+                });
+            }
+        }
+
+        function editStream(streamId) {
+            fetch(`/edit_stream/${streamId}`)
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('editStreamId').value = data.id;
+                document.getElementById('editStreamName').value = data.name;
+                document.getElementById('editInputPath').value = data.input_path;
+                document.getElementById('editOutputRtmp').value = data.output_rtmp;
+                document.getElementById('editScheduledTime').value = data.scheduled_time.slice(0, 16);
+                new bootstrap.Modal(document.getElementById('editStreamModal')).show();
+            });
+        }
+
+        function updateStream() {
+            const streamId = document.getElementById('editStreamId').value;
+            const data = {
+                name: document.getElementById('editStreamName').value,
+                input_path: document.getElementById('editInputPath').value,
+                output_rtmp: document.getElementById('editOutputRtmp').value,
+                scheduled_time: document.getElementById('editScheduledTime').value
+            };
+
+            fetch(`/edit_stream/${streamId}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success' || data.message === 'Stream updated successfully') {
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error al actualizar el stream');
+            });
+        }
+
+        function toggleStream(streamId, button) {
+            fetch(`/toggle_stream/${streamId}`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    const card = button.closest('.stream-card');
+                    if (data.is_active) {
+                        button.classList.add('active');
+                        button.textContent = 'Activado';
+                        card.classList.remove('inactive');
+                    } else {
+                        button.classList.remove('active');
+                        button.textContent = 'Desactivado';
+                        card.classList.add('inactive');
+                    }
+                } else {
+                    alert('Error: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error al cambiar el estado del stream');
+            });
+        }
+
+        function createBackup() {
+            fetch('/backup', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    showAlert('success', 'Backup created successfully');
+                } else {
+                    showAlert('danger', 'Error creating backup: ' + data.message);
+                }
+            })
+            .catch(error => {
+                showAlert('danger', 'Error creating backup: ' + error);
+            });
+        }
+        
+        function showAlert(type, message) {
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
+            alertDiv.style.zIndex = '1050';
+            alertDiv.innerHTML = `
+                ${message}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            document.body.appendChild(alertDiv);
+            
+            // Auto-dismiss after 3 seconds
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 3000);
+        }
+
+        function showAddStreamModal() {
+            new bootstrap.Modal(document.getElementById('addStreamModal')).show();
+        }
+    </script>
+</body>
+</html>
