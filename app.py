@@ -1,7 +1,7 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
-from datetime import datetime
+from datetime import datetime, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 import ffmpeg
 import threading
@@ -40,7 +40,7 @@ class Stream(db.Model):
     last_played = db.Column(db.DateTime)
     play_count = db.Column(db.Integer, default=0)
     video_params = db.Column(db.String(500), default='-c:v copy -c:a aac -f flv')
-    max_plays = db.Column(db.Integer, default=0)  # 0 significa sin límite
+    repeat_type = db.Column(db.String(20), default='once')  # once, daily, weekly, monthly
 
 def backup_database():
     """Crear una copia de seguridad de la base de datos con marca de tiempo."""
@@ -93,6 +93,29 @@ def ensure_upload_folder():
         print(f"Error al crear la carpeta de uploads: {str(e)}")
         return False
 
+def calculate_next_run(stream):
+    """Calcula la próxima ejecución basada en el tipo de repetición"""
+    if not stream.last_played:
+        return stream.scheduled_time
+    
+    current_time = datetime.now()
+    base_time = max(stream.last_played, current_time)
+    
+    if stream.repeat_type == 'once':
+        return None
+    elif stream.repeat_type == 'daily':
+        next_run = base_time + timedelta(days=1)
+        return datetime.combine(next_run.date(), stream.scheduled_time.time())
+    elif stream.repeat_type == 'weekly':
+        next_run = base_time + timedelta(weeks=1)
+        return datetime.combine(next_run.date(), stream.scheduled_time.time())
+    elif stream.repeat_type == 'monthly':
+        # Calcular el próximo mes manteniendo el mismo día del mes
+        next_month = base_time.replace(day=1) + timedelta(days=32)
+        next_run = next_month.replace(day=min(stream.scheduled_time.day, (next_month.replace(day=1) + timedelta(days=32) - timedelta(days=1)).day))
+        return datetime.combine(next_run.date(), stream.scheduled_time.time())
+    return None
+
 def stream_video(stream_id):
     """Función que maneja la transmisión del video"""
     with app.app_context():
@@ -108,9 +131,8 @@ def stream_video(stream_id):
             print(f"Hora actual: {datetime.now()}")
             print(f"Archivo de entrada: {stream.input_path}")
             print(f"RTMP destino: {stream.output_rtmp}")
-            print(f"Parámetros de video: {stream.video_params}")
-            print(f"Reproducción {stream.play_count + 1}" + 
-                  (f" de {stream.max_plays}" if stream.max_plays > 0 else ""))
+            print(f"Parámetros de video: {stream.video_params or '-c:v copy -c:a aac -f flv'}")
+            print(f"Tipo de repetición: {stream.repeat_type}")
             print(f"{'='*50}\n")
             
             if not os.path.exists(stream.input_path):
@@ -126,8 +148,9 @@ def stream_video(stream_id):
             
             # Comando ffmpeg para streaming
             command = ['ffmpeg', '-re', '-i', stream.input_path]
-            # Agregar parámetros de video personalizados
-            command.extend(stream.video_params.split())
+            # Usar parámetros por defecto si no hay personalizados
+            video_params = (stream.video_params or '-c:v copy -c:a aac -f flv').split()
+            command.extend(video_params)
             command.append(stream.output_rtmp)
             
             print("Ejecutando ffmpeg:")
@@ -146,15 +169,19 @@ def stream_video(stream_id):
                 print(f"\n{'='*50}")
                 print(f"Stream {stream_id} completado exitosamente")
                 print(f"Duración total: {datetime.now() - stream.last_played}")
+                stream.status = 'completed'
                 
-                # Verificar si se alcanzó el límite de reproducciones
-                if stream.max_plays > 0 and stream.play_count >= stream.max_plays:
-                    print(f"Se alcanzó el límite de {stream.max_plays} reproducciones")
+                # Calcular próxima ejecución
+                next_run = calculate_next_run(stream)
+                if next_run:
+                    stream.scheduled_time = next_run
+                    stream.status = 'pending'
+                    print(f"Próxima ejecución programada: {next_run}")
+                else:
                     stream.is_active = False
-                    print("Stream desactivado automáticamente")
+                    print("No hay más repeticiones programadas")
                 
                 print(f"{'='*50}\n")
-                stream.status = 'completed'
             else:
                 print(f"\n{'='*50}")
                 print(f"Error en stream {stream_id}:")
@@ -165,6 +192,10 @@ def stream_video(stream_id):
                 stream.status = 'error'
             
             db.session.commit()
+            
+            # Reprogramar si es necesario
+            if stream.is_active and stream.status == 'pending':
+                schedule_stream(stream)
             
         except Exception as e:
             print(f"\n{'='*50}")
@@ -204,8 +235,29 @@ def schedule_stream(stream):
 
 @app.route('/')
 def index():
-    streams = Stream.query.order_by(Stream.scheduled_time).all()
-    return render_template('index.html', streams=streams)
+    sort_by = request.args.get('sort', 'scheduled_time')  # Por defecto ordena por hora programada
+    order = request.args.get('order', 'asc')  # asc o desc
+    
+    query = Stream.query
+    
+    if sort_by == 'scheduled_time':
+        if order == 'desc':
+            query = query.order_by(Stream.scheduled_time.desc())
+        else:
+            query = query.order_by(Stream.scheduled_time.asc())
+    elif sort_by == 'name':
+        if order == 'desc':
+            query = query.order_by(Stream.name.desc())
+        else:
+            query = query.order_by(Stream.name.asc())
+    elif sort_by == 'status':
+        if order == 'desc':
+            query = query.order_by(Stream.status.desc())
+        else:
+            query = query.order_by(Stream.status.asc())
+    
+    streams = query.all()
+    return render_template('index.html', streams=streams, current_sort=sort_by, current_order=order)
 
 @app.route('/add_stream', methods=['POST'])
 def add_stream():
@@ -217,15 +269,13 @@ def add_stream():
         input_path = request.form.get('input_path')
         output_rtmp = request.form.get('output_rtmp')
         scheduled_time_str = request.form.get('scheduled_time')
-        video_params = request.form.get('video_params', '-c:v copy -c:a aac -f flv')
-        max_plays = request.form.get('max_plays', '0')
+        video_params = request.form.get('video_params')
+        if not video_params or video_params.strip() == '':
+            video_params = '-c:v copy -c:a aac -f flv'
+        repeat_type = request.form.get('repeat_type', 'once')
         
-        try:
-            max_plays = int(max_plays)
-            if max_plays < 0:
-                return jsonify({'error': 'El número máximo de reproducciones no puede ser negativo'}), 400
-        except ValueError:
-            return jsonify({'error': 'El número máximo de reproducciones debe ser un número válido'}), 400
+        if repeat_type not in ['once', 'daily', 'weekly', 'monthly']:
+            return jsonify({'error': 'Tipo de repetición inválido'}), 400
         
         if not all([name, output_rtmp, scheduled_time_str]):
             return jsonify({'error': 'Faltan campos requeridos'}), 400
@@ -254,7 +304,7 @@ def add_stream():
             output_rtmp=output_rtmp,
             scheduled_time=scheduled_time,
             video_params=video_params,
-            max_plays=max_plays
+            repeat_type=repeat_type
         )
         
         db.session.add(stream)
@@ -274,7 +324,7 @@ def add_stream():
                 'is_active': stream.is_active,
                 'status': stream.status,
                 'video_params': stream.video_params,
-                'max_plays': stream.max_plays
+                'repeat_type': stream.repeat_type
             }
         })
         
@@ -316,9 +366,8 @@ def edit_stream(stream_id):
             'scheduled_time': stream.scheduled_time.isoformat(),
             'is_active': stream.is_active,
             'status': stream.status,
-            'video_params': stream.video_params,
-            'max_plays': stream.max_plays,
-            'play_count': stream.play_count
+            'video_params': stream.video_params or '-c:v copy -c:a aac -f flv',
+            'repeat_type': stream.repeat_type
         })
     
     # Método PUT
@@ -331,15 +380,10 @@ def edit_stream(stream_id):
         input_path = request.form.get('input_path', stream.input_path)
         output_rtmp = request.form.get('output_rtmp', stream.output_rtmp)
         scheduled_time_str = request.form.get('scheduled_time')
-        video_params = request.form.get('video_params', stream.video_params)
-        max_plays = request.form.get('max_plays', str(stream.max_plays))
-        
-        try:
-            max_plays = int(max_plays)
-            if max_plays < 0:
-                return jsonify({'error': 'El número máximo de reproducciones no puede ser negativo'}), 400
-        except ValueError:
-            return jsonify({'error': 'El número máximo de reproducciones debe ser un número válido'}), 400
+        video_params = request.form.get('video_params')
+        if not video_params or video_params.strip() == '':
+            video_params = '-c:v copy -c:a aac -f flv'
+        repeat_type = request.form.get('repeat_type', stream.repeat_type)
         
         # Manejar la subida de nuevo video si existe
         if 'video' in request.files:
@@ -364,7 +408,7 @@ def edit_stream(stream_id):
         stream.input_path = input_path
         stream.output_rtmp = output_rtmp
         stream.video_params = video_params
-        stream.max_plays = max_plays
+        stream.repeat_type = repeat_type
         
         if scheduled_time_str:
             try:
@@ -393,7 +437,7 @@ def edit_stream(stream_id):
                 'is_active': stream.is_active,
                 'status': stream.status,
                 'video_params': stream.video_params,
-                'max_plays': stream.max_plays
+                'repeat_type': stream.repeat_type
             }
         })
         
@@ -487,6 +531,49 @@ def check_stream(stream_id):
         })
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/list_files')
+def list_files():
+    upload_dir = os.path.join(app.root_path, 'uploads')
+    files = []
+    total_size = 0
+    
+    try:
+        for filename in os.listdir(upload_dir):
+            filepath = os.path.join(upload_dir, filename)
+            if os.path.isfile(filepath):
+                size = os.path.getsize(filepath)
+                modified = os.path.getmtime(filepath)
+                files.append({
+                    'name': filename,
+                    'size': size,
+                    'size_formatted': format_size(size),
+                    'modified': datetime.fromtimestamp(modified).strftime('%Y-%m-%d %H:%M:%S'),
+                    'type': os.path.splitext(filename)[1][1:].upper() or 'FILE'
+                })
+                total_size += size
+        
+        return jsonify({
+            'files': sorted(files, key=lambda x: x['modified'], reverse=True),
+            'total_size': format_size(total_size)
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/play/<filename>')
+def play_video(filename):
+    upload_dir = os.path.join(app.root_path, 'uploads')
+    video_path = os.path.join(upload_dir, filename)
+    if os.path.exists(video_path) and filename.lower().endswith(('.mp4', '.mov', '.avi')):
+        return send_from_directory(upload_dir, filename)
+    return 'Archivo no encontrado', 404
+
+def format_size(size):
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size < 1024:
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"
 
 if __name__ == '__main__':
     with app.app_context():

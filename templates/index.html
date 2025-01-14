@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stream Manager Pro</title>
+    <title>RTMP Streamer</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         :root {
             --primary-color: #2c3e50;
@@ -40,12 +40,22 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
         }
 
+        .stream-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1rem;
+            padding: 1rem;
+        }
+
         .stream-card {
+            border: 1px solid #dee2e6;
+            border-radius: 0.25rem;
+            padding: 1rem;
+            background-color: white;
             transition: all 0.3s ease;
             border: none;
             border-radius: 12px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            background: white;
             height: 100%;
             position: relative;
         }
@@ -53,11 +63,11 @@
         .stream-card.inactive {
             opacity: 0.7;
         }
-        
+
         .stream-card.inactive .card-body {
             position: relative;
         }
-        
+
         .stream-card.inactive .card-body::after {
             content: 'DISABLED';
             position: absolute;
@@ -84,41 +94,50 @@
         }
 
         .status-badge {
+            padding: 0.25em 0.6em;
+            font-size: 0.85em;
+            border-radius: 0.25rem;
             position: absolute;
             top: 1rem;
             right: 1rem;
+        }
+
+        .view-toggle {
             padding: 0.5rem 1rem;
-            border-radius: 50px;
-            font-weight: 500;
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
+            text-align: right;
         }
 
-        .play-info {
-            font-size: 0.85rem;
-            color: #666;
-            padding: 0.5rem;
-            background: #f8f9fa;
-            border-radius: 8px;
-            margin-top: 1rem;
+        .view-toggle .btn {
+            padding: 0.25rem 0.5rem;
         }
 
-        .play-badge {
-            position: absolute;
-            top: 3rem;
-            right: 1rem;
-            background: var(--accent-color);
-            color: white;
-            padding: 0.25rem 0.75rem;
-            border-radius: 50px;
-            font-size: 0.8rem;
-            font-weight: 500;
+        .view-toggle .btn i {
+            font-size: 1.2rem;
         }
 
-        .play-count {
-            font-weight: 600;
-            color: var(--accent-color);
+        .btn-icon {
+            padding: 0.25rem 0.5rem;
+            margin-left: 0.25rem;
+        }
+
+        .stream-actions {
+            text-align: right;
+        }
+
+        .stream-list {
+            padding: 1rem;
+        }
+
+        .stream-list-item {
+            background-color: white;
+            border: 1px solid #dee2e6;
+            border-radius: 0.25rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .stream-list-item .row {
+            align-items: center;
         }
 
         .btn-primary {
@@ -202,412 +221,571 @@
         }
     </style>
 </head>
-<body>
+<body class="bg-light">
     <!-- Navbar -->
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container">
-            <a class="navbar-brand" href="#">
-                <i class="fas fa-video me-2"></i>
-                Stream Manager Pro
-            </a>
+            <a class="navbar-brand" href="#">RTMP Streamer</a>
         </div>
     </nav>
 
-    <!-- Page Header -->
-    <div class="page-header">
-        <div class="container">
-            <h1>Gestión de Streams</h1>
-            <p class="lead">Administra y programa tus transmisiones en vivo</p>
-        </div>
-    </div>
-
-    <!-- Main Content -->
-    <div class="container mt-4">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1>Stream Manager Pro</h1>
-            <div>
-                <button type="button" class="btn btn-success me-2" onclick="createBackup()">
-                    <i class="fas fa-save"></i> Create Backup
-                </button>
-                <button type="button" class="btn btn-primary" onclick="showAddStreamModal()">
-                    <i class="fas fa-plus"></i> Add Stream
-                </button>
+    <!-- Panel de archivos -->
+    <div class="container-fluid">
+        <div class="card mb-4">
+            <div class="card-header bg-light">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0">Archivos en Upload</h5>
+                    </div>
+                    <div>
+                        <span class="text-muted" id="totalSize"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Tipo</th>
+                            <th>Tamaño</th>
+                            <th>Última modificación</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="fileList">
+                        <!-- Los archivos se cargarán dinámicamente -->
+                    </tbody>
+                </table>
             </div>
         </div>
 
-        <!-- Stream Cards -->
-        <div class="row g-4">
+        <!-- Modal para reproducir video -->
+        <div class="modal fade" id="videoModal" tabindex="-1">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Reproducir Video</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <video id="videoPlayer" class="w-100" controls>
+                            <source src="" type="video/mp4">
+                            Tu navegador no soporta la reproducción de video.
+                        </video>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Resto del contenido -->
+        <div class="row mb-3">
+            <div class="col-auto">
+                <div class="btn-group">
+                    <button type="button" id="gridViewBtn" class="btn btn-outline-secondary" onclick="setView('grid')">
+                        <i class="bi bi-grid"></i> Cuadrícula
+                    </button>
+                    <button type="button" id="listViewBtn" class="btn btn-outline-secondary" onclick="setView('list')">
+                        <i class="bi bi-list-ul"></i> Lista
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Vista en Grid -->
+        <div id="gridView" class="stream-grid">
             {% for stream in streams %}
-            <div class="col-md-6 col-lg-4">
-                <div class="stream-card {{ 'inactive' if not stream.is_active }}">
-                    <div class="card-body">
-                        <span class="status-badge badge bg-{{ 'success' if stream.status == 'completed' else 'warning' if stream.status == 'scheduled' else 'danger' }}">
-                            <i class="fas fa-{{ 'check' if stream.status == 'completed' else 'clock' if stream.status == 'scheduled' else 'exclamation-triangle' }} me-1"></i>
+            <div class="stream-card {{ 'inactive' if not stream.is_active }}">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h5 class="mb-0">{{ stream.name }}</h5>
+                    <span class="status-badge badge {% if stream.status == 'pending' %}bg-warning{% elif stream.status == 'streaming' %}bg-success{% elif stream.status == 'completed' %}bg-info{% else %}bg-danger{% endif %}">
+                        {{ stream.status }}
+                    </span>
+                </div>
+                <div class="mb-2">
+                    <small class="text-muted">Programado para:</small><br>
+                    {{ stream.scheduled_time.strftime('%Y-%m-%d %H:%M') }}
+                </div>
+                <div class="mb-2">
+                    <small class="text-muted">Estado:</small><br>
+                    <button 
+                        class="btn btn-sm {% if stream.is_active %}btn-success{% else %}btn-secondary{% endif %} toggle-btn"
+                        onclick="toggleStream({{ stream.id }}, this)"
+                        data-active="{{ 'true' if stream.is_active else 'false' }}"
+                    >
+                        <i class="bi {% if stream.is_active %}bi-toggle-on{% else %}bi-toggle-off{% endif %}"></i>
+                        {{ 'Activo' if stream.is_active else 'Inactivo' }}
+                    </button>
+                </div>
+                <div class="d-flex justify-content-end mt-3 gap-2">
+                    <button class="btn btn-sm btn-outline-primary d-flex align-items-center gap-1" onclick="editStream({{ stream.id }})">
+                        <i class="bi bi-pencil"></i>
+                        <span>Editar</span>
+                    </button>
+                    <button class="btn btn-sm btn-outline-danger d-flex align-items-center gap-1" onclick="deleteStream({{ stream.id }})">
+                        <i class="bi bi-trash"></i>
+                        <span>Eliminar</span>
+                    </button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <!-- Vista en Lista -->
+        <div id="listView" class="stream-list" style="display: none;">
+            {% for stream in streams %}
+            <div class="stream-list-item">
+                <div class="row align-items-center">
+                    <div class="col-md-3">
+                        <h5 class="mb-0">{{ stream.name }}</h5>
+                        <small class="text-muted">ID: {{ stream.id }}</small>
+                    </div>
+                    <div class="col-md-2">
+                        <small class="text-muted">Estado:</small><br>
+                        <span class="status-badge badge {% if stream.status == 'pending' %}bg-warning{% elif stream.status == 'streaming' %}bg-success{% elif stream.status == 'completed' %}bg-info{% else %}bg-danger{% endif %}">
                             {{ stream.status }}
                         </span>
-                        {% if stream.play_count > 0 %}
-                        <span class="play-badge">
-                            <i class="fas fa-play me-1"></i>
-                            {{ stream.play_count }} reproducción{{ 'es' if stream.play_count != 1 }}
-                        </span>
-                        {% endif %}
-                        <h5 class="card-title mb-3">{{ stream.name }}</h5>
-                        <div class="stream-info">
-                            <p class="mb-2">
-                                <i class="fas fa-calendar-alt me-2"></i>
-                                {{ stream.scheduled_time.strftime('%Y-%m-%d %H:%M') }}
-                            </p>
-                            <p class="mb-2">
-                                <i class="fas fa-folder-open me-2"></i>
-                                {{ stream.input_path }}
-                            </p>
-                            <p class="mb-0">
-                                <i class="fas fa-link me-2"></i>
-                                {{ stream.output_rtmp }}
-                            </p>
-                        </div>
-                        {% if stream.last_played %}
-                        <div class="play-info">
-                            <p class="mb-1">
-                                <i class="fas fa-history me-2"></i>
-                                Última reproducción:
-                            </p>
-                            <p class="mb-0">
-                                {{ stream.last_played.strftime('%Y-%m-%d %H:%M:%S') }}
-                            </p>
-                        </div>
-                        {% endif %}
-                        <div class="d-flex justify-content-between align-items-center mt-3">
-                            <button 
-                                class="btn btn-toggle {{ 'active' if stream.is_active }}"
-                                onclick="toggleStream({{ stream.id }}, this)"
-                            >
-                                {{ 'Activado' if stream.is_active else 'Desactivado' }}
-                            </button>
-                            <div>
-                                <button class="btn btn-primary" onclick="editStream({{ stream.id }})">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button class="btn btn-danger ms-2" onclick="deleteStream({{ stream.id }})">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <button 
+                            class="btn btn-sm {% if stream.is_active %}btn-success{% else %}btn-secondary{% endif %} toggle-btn"
+                            onclick="toggleStream({{ stream.id }}, this)"
+                            data-active="{{ 'true' if stream.is_active else 'false' }}"
+                        >
+                            <i class="bi {% if stream.is_active %}bi-toggle-on{% else %}bi-toggle-off{% endif %}"></i>
+                            {{ 'Activo' if stream.is_active else 'Inactivo' }}
+                        </button>
+                    </div>
+                    <div class="col-md-3">
+                        <small class="text-muted">Programado:</small><br>
+                        {{ stream.scheduled_time.strftime('%Y-%m-%d %H:%M') }}
+                    </div>
+                    <div class="col-md-2 stream-actions">
+                        <button class="btn btn-sm btn-outline-primary btn-icon" onclick="editStream({{ stream.id }})">
+                            <i class="bi bi-pencil"></i>
+                            <span>Editar</span>
+                        </button>
+                        <button class="btn btn-sm btn-outline-danger btn-icon" onclick="deleteStream({{ stream.id }})">
+                            <i class="bi bi-trash"></i>
+                            <span>Eliminar</span>
+                        </button>
                     </div>
                 </div>
             </div>
             {% endfor %}
         </div>
-    </div>
 
-    <!-- Add Stream Modal -->
-    <div class="modal fade" id="addStreamModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Agregar Nuevo Stream</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="addStreamForm">
-                        <div class="mb-3">
-                            <label for="name" class="form-label">Nombre</label>
-                            <input type="text" class="form-control" id="name" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="video" class="form-label">Archivo de Video</label>
-                            <input type="file" class="form-control" id="video" accept="video/*">
-                        </div>
-                        <div class="mb-3">
-                            <label for="input_path" class="form-label">Ruta de Entrada (opcional si sube archivo)</label>
-                            <input type="text" class="form-control" id="input_path">
-                        </div>
-                        <div class="mb-3">
-                            <label for="output_rtmp" class="form-label">URL RTMP</label>
-                            <input type="text" class="form-control" id="output_rtmp" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="scheduled_time" class="form-label">Hora Programada</label>
-                            <input type="datetime-local" class="form-control" id="scheduled_time" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="video_params" class="form-label">Parámetros de Video</label>
-                            <input type="text" class="form-control" id="video_params" 
-                                   placeholder="-c:v copy -c:a aac -f flv"
-                                   title="Parámetros para ffmpeg (ej: -c:v copy -c:a aac -f flv)">
-                            <small class="form-text text-muted">
-                                Parámetros para ffmpeg. Por defecto: -c:v copy -c:a aac -f flv
-                            </small>
-                        </div>
-                        <div class="mb-3">
-                            <label for="max_plays" class="form-label">Número Máximo de Reproducciones</label>
-                            <input type="number" class="form-control" id="max_plays" 
-                                   value="0" min="0"
-                                   title="0 para reproducciones ilimitadas">
-                            <small class="form-text text-muted">
-                                Número máximo de veces que se reproducirá (0 = sin límite)
-                            </small>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" onclick="addStream()">Agregar</button>
+        <!-- Add Stream Modal -->
+        <div class="modal fade" id="addStreamModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Agregar Nuevo Stream</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="addStreamForm">
+                            <div class="mb-3">
+                                <label for="name" class="form-label">Nombre</label>
+                                <input type="text" class="form-control" id="name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="video" class="form-label">Archivo de Video</label>
+                                <input type="file" class="form-control" id="video" accept="video/*">
+                            </div>
+                            <div class="mb-3">
+                                <label for="input_path" class="form-label">Ruta de Entrada (opcional si sube archivo)</label>
+                                <input type="text" class="form-control" id="input_path">
+                            </div>
+                            <div class="mb-3">
+                                <label for="output_rtmp" class="form-label">URL RTMP</label>
+                                <input type="text" class="form-control" id="output_rtmp" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="scheduled_time" class="form-label">Hora Programada</label>
+                                <input type="datetime-local" class="form-control" id="scheduled_time" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="video_params" class="form-label">Parámetros de Video</label>
+                                <input type="text" class="form-control" id="video_params" 
+                                       placeholder="-c:v copy -c:a aac -f flv"
+                                       title="Parámetros para ffmpeg (ej: -c:v copy -c:a aac -f flv)">
+                                <small class="form-text text-muted">
+                                    Parámetros para ffmpeg. Por defecto: -c:v copy -c:a aac -f flv
+                                </small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="repeat_type" class="form-label">Tipo de Repetición</label>
+                                <select class="form-select" id="repeat_type">
+                                    <option value="once">Una vez</option>
+                                    <option value="daily">Diario</option>
+                                    <option value="weekly">Semanal</option>
+                                    <option value="monthly">Mensual</option>
+                                </select>
+                                <small class="form-text text-muted">
+                                    Después de ejecutarse, el stream se programará automáticamente según el tipo de repetición seleccionado.
+                                    Si selecciona "Una vez", el stream se desactivará después de ejecutarse.
+                                </small>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" onclick="addStream()">Agregar</button>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Edit Stream Modal -->
-    <div class="modal fade" id="editStreamModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">Editar Stream</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="editStreamForm">
-                        <input type="hidden" id="edit_stream_id">
-                        <div class="mb-3">
-                            <label for="edit_name" class="form-label">Nombre</label>
-                            <input type="text" class="form-control" id="edit_name" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="edit_video" class="form-label">Nuevo Video (opcional)</label>
-                            <input type="file" class="form-control" id="edit_video" accept="video/*">
-                        </div>
-                        <div class="mb-3">
-                            <label for="edit_input_path" class="form-label">Ruta de Entrada</label>
-                            <input type="text" class="form-control" id="edit_input_path">
-                        </div>
-                        <div class="mb-3">
-                            <label for="edit_output_rtmp" class="form-label">URL RTMP</label>
-                            <input type="text" class="form-control" id="edit_output_rtmp" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="edit_scheduled_time" class="form-label">Hora Programada</label>
-                            <input type="datetime-local" class="form-control" id="edit_scheduled_time" required>
-                        </div>
-                        <div class="mb-3">
-                            <label for="edit_video_params" class="form-label">Parámetros de Video</label>
-                            <input type="text" class="form-control" id="edit_video_params" 
-                                   placeholder="-c:v copy -c:a aac -f flv"
-                                   title="Parámetros para ffmpeg (ej: -c:v copy -c:a aac -f flv)">
-                            <small class="form-text text-muted">
-                                Parámetros para ffmpeg. Por defecto: -c:v copy -c:a aac -f flv
-                            </small>
-                        </div>
-                        <div class="mb-3">
-                            <label for="edit_max_plays" class="form-label">Número Máximo de Reproducciones</label>
-                            <input type="number" class="form-control" id="edit_max_plays" 
-                                   min="0"
-                                   title="0 para reproducciones ilimitadas">
-                            <small class="form-text text-muted">
-                                Número máximo de veces que se reproducirá (0 = sin límite)
-                                <br>
-                                Reproducciones actuales: <span id="edit_play_count">0</span>
-                            </small>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                    <button type="button" class="btn btn-primary" onclick="updateStream()">Guardar</button>
+        <!-- Edit Stream Modal -->
+        <div class="modal fade" id="editStreamModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Editar Stream</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="editStreamForm">
+                            <input type="hidden" id="edit_stream_id">
+                            <div class="mb-3">
+                                <label for="edit_name" class="form-label">Nombre</label>
+                                <input type="text" class="form-control" id="edit_name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_video" class="form-label">Nuevo Video (opcional)</label>
+                                <input type="file" class="form-control" id="edit_video" accept="video/*">
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_input_path" class="form-label">Ruta de Entrada</label>
+                                <input type="text" class="form-control" id="edit_input_path">
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_output_rtmp" class="form-label">URL RTMP</label>
+                                <input type="text" class="form-control" id="edit_output_rtmp" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_scheduled_time" class="form-label">Hora Programada</label>
+                                <input type="datetime-local" class="form-control" id="edit_scheduled_time" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_video_params" class="form-label">Parámetros de Video</label>
+                                <input type="text" class="form-control" id="edit_video_params" 
+                                       placeholder="-c:v copy -c:a aac -f flv"
+                                       title="Parámetros para ffmpeg (ej: -c:v copy -c:a aac -f flv)">
+                                <small class="form-text text-muted">
+                                    Parámetros para ffmpeg. Por defecto: -c:v copy -c:a aac -f flv
+                                </small>
+                            </div>
+                            <div class="mb-3">
+                                <label for="edit_repeat_type" class="form-label">Tipo de Repetición</label>
+                                <select class="form-select" id="edit_repeat_type">
+                                    <option value="once">Una vez</option>
+                                    <option value="daily">Diario</option>
+                                    <option value="weekly">Semanal</option>
+                                    <option value="monthly">Mensual</option>
+                                </select>
+                                <small class="form-text text-muted">
+                                    Después de ejecutarse, el stream se programará automáticamente según el tipo de repetición seleccionado.
+                                    Si selecciona "Una vez", el stream se desactivará después de ejecutarse.
+                                </small>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" onclick="updateStream()">Guardar</button>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        function addStream() {
-            const formData = new FormData();
-            formData.append('name', document.getElementById('name').value);
-            formData.append('output_rtmp', document.getElementById('output_rtmp').value);
-            formData.append('scheduled_time', document.getElementById('scheduled_time').value);
-            
-            const videoFile = document.getElementById('video').files[0];
-            if (videoFile) {
-                formData.append('video', videoFile);
-            } else {
-                const inputPath = document.getElementById('input_path').value;
-                if (inputPath) {
-                    formData.append('input_path', inputPath);
-                }
-            }
-            
-            const videoParams = document.getElementById('video_params').value;
-            if (videoParams) {
-                formData.append('video_params', videoParams);
-            }
-            
-            const maxPlays = document.getElementById('max_plays').value;
-            formData.append('max_plays', maxPlays);
-            
-            fetch('/add_stream', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    alert(data.error);
+        <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+        <script>
+            function addStream() {
+                const formData = new FormData();
+                formData.append('name', document.getElementById('name').value);
+                formData.append('output_rtmp', document.getElementById('output_rtmp').value);
+                formData.append('scheduled_time', document.getElementById('scheduled_time').value);
+                formData.append('repeat_type', document.getElementById('repeat_type').value);
+                
+                const videoFile = document.getElementById('video').files[0];
+                if (videoFile) {
+                    formData.append('video', videoFile);
                 } else {
-                    location.reload();
+                    const inputPath = document.getElementById('input_path').value;
+                    if (inputPath) {
+                        formData.append('input_path', inputPath);
+                    }
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error al agregar stream');
-            });
-        }
-
-        function deleteStream(streamId) {
-            if (confirm('¿Estás seguro de que quieres eliminar este stream?')) {
-                fetch(`/delete_stream/${streamId}`, {
-                    method: 'DELETE'
+                
+                const videoParams = document.getElementById('video_params').value;
+                if (videoParams) {
+                    formData.append('video_params', videoParams);
+                }
+                
+                fetch('/add_stream', {
+                    method: 'POST',
+                    body: formData
                 })
                 .then(response => response.json())
                 .then(data => {
-                    if (data.status === 'success') {
-                        location.reload();
+                    if (data.error) {
+                        alert(data.error);
                     } else {
-                        alert('Error: ' + data.message);
+                        location.reload();
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    alert('Error al eliminar el stream');
+                    alert('Error al agregar stream');
                 });
             }
-        }
 
-        function editStream(streamId) {
-            fetch(`/edit_stream/${streamId}`)
-            .then(response => response.json())
-            .then(stream => {
-                document.getElementById('edit_stream_id').value = stream.id;
-                document.getElementById('edit_name').value = stream.name;
-                document.getElementById('edit_input_path').value = stream.input_path;
-                document.getElementById('edit_output_rtmp').value = stream.output_rtmp;
-                document.getElementById('edit_scheduled_time').value = stream.scheduled_time.slice(0, 16);
-                document.getElementById('edit_video_params').value = stream.video_params;
-                document.getElementById('edit_max_plays').value = stream.max_plays;
-                document.getElementById('edit_play_count').textContent = stream.play_count;
+            function deleteStream(streamId) {
+                if (confirm('¿Estás seguro de que quieres eliminar este stream?')) {
+                    fetch(`/delete_stream/${streamId}`, {
+                        method: 'DELETE'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            location.reload();
+                        } else {
+                            alert('Error: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Error al eliminar el stream');
+                    });
+                }
+            }
+
+            function editStream(streamId) {
+                fetch(`/edit_stream/${streamId}`)
+                .then(response => response.json())
+                .then(stream => {
+                    document.getElementById('edit_stream_id').value = stream.id;
+                    document.getElementById('edit_name').value = stream.name;
+                    document.getElementById('edit_input_path').value = stream.input_path;
+                    document.getElementById('edit_output_rtmp').value = stream.output_rtmp;
+                    document.getElementById('edit_scheduled_time').value = stream.scheduled_time.slice(0, 16);
+                    document.getElementById('edit_video_params').value = stream.video_params;
+                    document.getElementById('edit_repeat_type').value = stream.repeat_type;
+                    
+                    const editModal = new bootstrap.Modal(document.getElementById('editStreamModal'));
+                    editModal.show();
+                });
+            }
+
+            function updateStream() {
+                const streamId = document.getElementById('edit_stream_id').value;
+                const formData = new FormData();
                 
-                const editModal = new bootstrap.Modal(document.getElementById('editStreamModal'));
-                editModal.show();
-            });
-        }
-
-        function updateStream() {
-            const streamId = document.getElementById('edit_stream_id').value;
-            const formData = new FormData();
-            
-            formData.append('name', document.getElementById('edit_name').value);
-            formData.append('output_rtmp', document.getElementById('edit_output_rtmp').value);
-            formData.append('scheduled_time', document.getElementById('edit_scheduled_time').value);
-            
-            const videoFile = document.getElementById('edit_video').files[0];
-            if (videoFile) {
-                formData.append('video', videoFile);
-            } else {
-                formData.append('input_path', document.getElementById('edit_input_path').value);
-            }
-            
-            const videoParams = document.getElementById('edit_video_params').value;
-            if (videoParams) {
-                formData.append('video_params', videoParams);
-            }
-            
-            const maxPlays = document.getElementById('edit_max_plays').value;
-            formData.append('max_plays', maxPlays);
-            
-            fetch(`/edit_stream/${streamId}`, {
-                method: 'PUT',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    alert(data.error);
+                formData.append('name', document.getElementById('edit_name').value);
+                formData.append('output_rtmp', document.getElementById('edit_output_rtmp').value);
+                formData.append('scheduled_time', document.getElementById('edit_scheduled_time').value);
+                formData.append('repeat_type', document.getElementById('edit_repeat_type').value);
+                
+                const videoFile = document.getElementById('edit_video').files[0];
+                if (videoFile) {
+                    formData.append('video', videoFile);
                 } else {
-                    location.reload();
+                    formData.append('input_path', document.getElementById('edit_input_path').value);
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error al actualizar stream');
-            });
-        }
-
-        function toggleStream(streamId, button) {
-            fetch(`/toggle_stream/${streamId}`, {
-                method: 'POST'
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    const card = button.closest('.stream-card');
-                    if (data.is_active) {
-                        button.classList.add('active');
-                        button.textContent = 'Activado';
-                        card.classList.remove('inactive');
+                
+                const videoParams = document.getElementById('edit_video_params').value;
+                if (videoParams) {
+                    formData.append('video_params', videoParams);
+                }
+                
+                fetch(`/edit_stream/${streamId}`, {
+                    method: 'PUT',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(data.error);
                     } else {
-                        button.classList.remove('active');
-                        button.textContent = 'Desactivado';
-                        card.classList.add('inactive');
+                        location.reload();
                     }
-                } else {
-                    alert('Error: ' + data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Error al cambiar el estado del stream');
-            });
-        }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error al actualizar stream');
+                });
+            }
 
-        function createBackup() {
-            fetch('/backup', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    alert('Backup created successfully');
-                } else {
-                    alert('Error creating backup: ' + data.message);
-                }
-            })
-            .catch(error => {
-                alert('Error creating backup: ' + error);
-            });
-        }
-        
-        function showAlert(type, message) {
-            const alertDiv = document.createElement('div');
-            alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed top-0 start-50 translate-middle-x mt-3`;
-            alertDiv.style.zIndex = '1050';
-            alertDiv.innerHTML = `
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            `;
-            document.body.appendChild(alertDiv);
+            function toggleStream(streamId, button) {
+                fetch(`/toggle_stream/${streamId}`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // Actualizar el estado del botón
+                    const isActive = data.is_active;
+                    button.classList.remove(isActive ? 'btn-secondary' : 'btn-success');
+                    button.classList.add(isActive ? 'btn-success' : 'btn-secondary');
+                    
+                    // Actualizar el ícono
+                    const icon = button.querySelector('i');
+                    icon.classList.remove(isActive ? 'bi-toggle-off' : 'bi-toggle-on');
+                    icon.classList.add(isActive ? 'bi-toggle-on' : 'bi-toggle-off');
+                    
+                    // Actualizar el texto
+                    button.innerHTML = `
+                        <i class="bi ${isActive ? 'bi-toggle-on' : 'bi-toggle-off'}"></i>
+                        ${isActive ? 'Activo' : 'Inactivo'}
+                    `;
+                    
+                    // Actualizar el atributo data-active
+                    button.setAttribute('data-active', isActive.toString());
+                    
+                    // Actualizar la tarjeta padre si estamos en vista de cuadrícula
+                    const card = button.closest('.stream-card');
+                    if (card) {
+                        if (isActive) {
+                            card.classList.remove('inactive');
+                        } else {
+                            card.classList.add('inactive');
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error al cambiar el estado del stream');
+                });
+            }
+
+            function createBackup() {
+                fetch('/backup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        alert('Backup created successfully');
+                    } else {
+                        alert('Error creating backup: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Error creating backup: ' + error);
+                });
+            }
             
-            // Auto-dismiss after 3 seconds
-            setTimeout(() => {
-                alertDiv.remove();
-            }, 3000);
-        }
+            function setView(view) {
+                const gridView = document.getElementById('gridView');
+                const listView = document.getElementById('listView');
+                const gridViewBtn = document.getElementById('gridViewBtn');
+                const listViewBtn = document.getElementById('listViewBtn');
 
-        function showAddStreamModal() {
-            new bootstrap.Modal(document.getElementById('addStreamModal')).show();
-        }
-    </script>
+                if (view === 'grid') {
+                    gridView.style.display = 'grid';
+                    listView.style.display = 'none';
+                    gridViewBtn.classList.add('active');
+                    listViewBtn.classList.remove('active');
+                } else {
+                    gridView.style.display = 'none';
+                    listView.style.display = 'block';
+                    gridViewBtn.classList.remove('active');
+                    listViewBtn.classList.add('active');
+                }
+
+                localStorage.setItem('preferredView', view);
+            }
+
+            // Cargar vista preferida al iniciar
+            document.addEventListener('DOMContentLoaded', function() {
+                const preferredView = localStorage.getItem('preferredView') || 'grid';
+                setView(preferredView);
+            });
+
+            // Función para cargar la lista de archivos
+            function loadFiles() {
+                fetch('/list_files')
+                    .then(response => response.json())
+                    .then(data => {
+                        const tbody = document.getElementById('fileList');
+                        const totalSize = document.getElementById('totalSize');
+                        
+                        // Actualizar el tamaño total
+                        totalSize.textContent = `Espacio total: ${data.total_size}`;
+                        
+                        // Limpiar la tabla
+                        tbody.innerHTML = '';
+                        
+                        // Agregar cada archivo
+                        data.files.forEach(file => {
+                            const isVideo = ['MP4', 'MOV', 'AVI'].includes(file.type);
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>
+                                    <i class="bi bi-file-earmark${getFileIcon(file.type)} me-2"></i>
+                                    ${file.name}
+                                </td>
+                                <td><span class="badge bg-secondary">${file.type}</span></td>
+                                <td>${file.size_formatted}</td>
+                                <td>${file.modified}</td>
+                                <td>
+                                    ${isVideo ? `
+                                        <button class="btn btn-sm btn-primary" onclick="playVideo('${file.name}')">
+                                            <i class="bi bi-play-fill"></i> Reproducir
+                                        </button>
+                                    ` : ''}
+                                </td>
+                            `;
+                            tbody.appendChild(row);
+                        });
+                    })
+                    .catch(error => console.error('Error cargando archivos:', error));
+            }
+
+            // Función para determinar el ícono según el tipo de archivo
+            function getFileIcon(type) {
+                const icons = {
+                    'MP4': '-play',
+                    'MOV': '-play',
+                    'AVI': '-play',
+                    'JPG': '-image',
+                    'JPEG': '-image',
+                    'PNG': '-image',
+                    'PDF': '-pdf',
+                    'DOC': '-word',
+                    'DOCX': '-word',
+                    'XLS': '-excel',
+                    'XLSX': '-excel',
+                    'ZIP': '-zip',
+                    'RAR': '-zip'
+                };
+                return icons[type] || '-text';
+            }
+
+            // Función para reproducir video
+            function playVideo(filename) {
+                const videoPlayer = document.getElementById('videoPlayer');
+                const videoModal = new bootstrap.Modal(document.getElementById('videoModal'));
+                videoPlayer.src = `/play/${filename}`;
+                videoModal.show();
+                
+                // Detener el video cuando se cierre el modal
+                document.getElementById('videoModal').addEventListener('hidden.bs.modal', function () {
+                    videoPlayer.pause();
+                    videoPlayer.src = '';
+                });
+            }
+
+            // Cargar archivos al iniciar y cada 30 segundos
+            document.addEventListener('DOMContentLoaded', function() {
+                loadFiles();
+                setInterval(loadFiles, 30000);
+            });
+        </script>
+    </div>
 </body>
 </html>
