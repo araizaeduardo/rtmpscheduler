@@ -1,64 +1,96 @@
-# RTMP Stream Scheduler
+# RTMP Streamer
 
-A web-based application for scheduling and managing RTMP video streams. This application allows you to schedule pre-recorded videos to be streamed to various RTMP destinations (like Vimeo) using FFmpeg.
+Sistema de gestión de transmisiones RTMP con programación y administración de archivos.
 
-## Features
+## Características
 
-- Schedule video streams with a user-friendly web interface
-- Support for multiple RTMP destinations
-- Automatic video streaming using FFmpeg
-- Stream status tracking
-- Easy management of scheduled streams
+### Gestión de Streams
+- Programación de transmisiones (única vez, diaria, semanal, mensual)
+- Estado de transmisiones en tiempo real
+- Vista en cuadrícula y lista
+- Activación/desactivación de streams
+- Ordenamiento por fecha, nombre y estado
 
-## Requirements
+### Administrador de Archivos
+- Vista de archivos en la carpeta de upload
+- Reproducción de videos directamente en el navegador
+- Soporte para múltiples formatos (MP4, MOV, AVI)
+- Información detallada de archivos (tamaño, tipo, fecha)
+- Actualización automática cada 30 segundos
 
-- Python 3.7+
-- FFmpeg installed on the system
-- Required Python packages (see requirements.txt)
+## Requisitos
 
-## Installation
+- Python 3.8+
+- Flask
+- FFmpeg
+- SQLAlchemy
+- APScheduler
 
-1. Install FFmpeg if not already installed:
-   ```bash
-   # For macOS using Homebrew
-   brew install ffmpeg
-   ```
+## Instalación
 
-2. Install Python dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+1. Clonar el repositorio:
+```bash
+git clone [url-del-repositorio]
+```
 
-3. Initialize the database:
-   ```bash
-   python app.py
-   ```
+2. Instalar dependencias:
+```bash
+pip install -r requirements.txt
+```
 
-## Usage
+3. Configurar la base de datos:
+```bash
+flask db upgrade
+```
 
-1. Start the application:
-   ```bash
-   python app.py
-   ```
+4. Iniciar el servidor:
+```bash
+python app.py
+```
 
-2. Open your web browser and navigate to `http://localhost:5000`
+## Estructura del Proyecto
 
-3. Use the web interface to:
-   - Add new stream schedules
-   - Monitor stream status
-   - Delete scheduled streams
+```
+.
+├── app.py              # Aplicación principal Flask
+├── config.py           # Configuraciones
+├── models.py           # Modelos de base de datos
+├── requirements.txt    # Dependencias
+├── upload/            # Directorio de archivos
+└── templates/         # Plantillas HTML
+    └── index.html     # Interfaz principal
+```
 
-## Stream Configuration
+## Uso
 
-When adding a new stream, you'll need to provide:
-- Stream Name: A descriptive name for the stream
-- Input Path: Path to the pre-recorded video file
-- Output RTMP URL: The destination RTMP URL (e.g., Vimeo RTMP URL)
-- Scheduled Time: When the stream should start
+1. **Gestión de Streams**
+   - Crear nuevo stream con el botón "Nuevo Stream"
+   - Programar la fecha y hora de transmisión
+   - Seleccionar tipo de repetición
+   - Activar/desactivar streams según necesidad
 
-## Notes
+2. **Administración de Archivos**
+   - Ver archivos en la carpeta upload
+   - Reproducir videos directamente en el navegador
+   - Monitorear espacio utilizado
+   - Ver información detallada de cada archivo
 
-- Make sure you have proper permissions for the input video files
-- Verify that your RTMP destinations are correctly configured and accessible
-- The application uses a SQLite database to store stream information
-- Streams are scheduled using APScheduler and processed using FFmpeg
+## Configuración
+
+El archivo `config.py` contiene las siguientes configuraciones:
+
+- `SQLALCHEMY_DATABASE_URI`: URL de la base de datos
+- `UPLOAD_FOLDER`: Ruta de la carpeta de archivos
+- `ALLOWED_EXTENSIONS`: Extensiones de archivo permitidas
+
+## Licencia
+
+[Tipo de Licencia]
+
+## Contribuir
+
+1. Fork del repositorio
+2. Crear rama de característica (`git checkout -b feature/nueva-caracteristica`)
+3. Commit de cambios (`git commit -am 'Agregar nueva característica'`)
+4. Push a la rama (`git push origin feature/nueva-caracteristica`)
+5. Crear Pull Request
