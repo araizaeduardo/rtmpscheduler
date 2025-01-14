@@ -30,11 +30,28 @@ ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mkv', 'mov', 'wmv'}
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 class Stream(db.Model):
+    """
+    Modelo de Stream que representa una transmisión de video.
+
+    Atributos:
+    id (int): Identificador único del stream.
+    name (str): Nombre del stream.
+    input_path (str): Ruta del archivo de video de entrada.
+    output_rtmp (str): URL de salida RTMP para la transmisión.
+    scheduled_time (datetime): Hora programada para la transmisión.
+    status (str): Estado actual del stream (pending, streaming, completed, error, expired).
+    is_active (bool): Indica si el stream está activo o no.
+    last_played (datetime): Fecha y hora de la última transmisión.
+    play_count (int): Número de veces que se ha transmitido el stream.
+    video_params (str): Parámetros de codificación de video para ffmpeg.
+    repeat_type (str): Tipo de repetición (once, daily, weekly, monthly).
+    """
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     input_path = db.Column(db.String(500), nullable=False)
     output_rtmp = db.Column(db.String(500), nullable=False)
     scheduled_time = db.Column(db.DateTime, nullable=False)
+    # Estados posibles: pending, streaming, completed, error, expired
     status = db.Column(db.String(20), default='pending')
     is_active = db.Column(db.Boolean, default=True)
     last_played = db.Column(db.DateTime)
@@ -412,7 +429,17 @@ def edit_stream(stream_id):
         
         if scheduled_time_str:
             try:
-                stream.scheduled_time = datetime.strptime(scheduled_time_str, '%Y-%m-%dT%H:%M')
+                new_scheduled_time = datetime.strptime(scheduled_time_str, '%Y-%m-%dT%H:%M')
+                stream.scheduled_time = new_scheduled_time
+                
+                # Verificar si la fecha es pasada
+                current_time = datetime.now()
+                if new_scheduled_time < current_time:
+                    stream.status = 'expired'
+                    stream.is_active = False
+                elif stream.status == 'expired' and new_scheduled_time > current_time:
+                    stream.status = 'pending'
+                    stream.is_active = True
             except ValueError:
                 return jsonify({'error': 'Formato de fecha inválido'}), 400
         

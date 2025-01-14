@@ -1,12 +1,38 @@
+# Framework principal
 Flask==2.3.3
 Werkzeug==2.3.7
-SQLAlchemy==2.0.23
+
+# Base de datos y migraciones
 Flask-SQLAlchemy==3.1.1
-Flask-Migrate==4.0.7
-APScheduler==3.11.0
+Flask-Migrate==4.0.5
+SQLAlchemy==2.0.21
+alembic==1.12.0
+
+# Programación de tareas
+APScheduler==3.10.4
+pytz==2023.3.post1
+
+# Procesamiento de video
 ffmpeg-python==0.2.0
+
+# Servidor de producción
+gunicorn==21.2.0
+gevent==23.9.1
+greenlet==3.0.0
+
+# Utilidades
 python-dateutil==2.8.2
-alembic==1.14.0
-Mako==1.3.8
-future==1.0.0
-tzlocal==5.2
+requests==2.31.0
+urllib3==2.0.5
+Jinja2==3.1.2
+MarkupSafe==2.1.3
+itsdangerous==2.1.2
+click==8.1.7
+
+# Seguridad
+python-dotenv==1.0.0
+bcrypt==4.0.1
+
+# Manejo de archivos y formatos
+Pillow==10.0.1
+python-magic==0.4.27
