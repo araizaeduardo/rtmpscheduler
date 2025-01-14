@@ -2,12 +2,16 @@ from flask import Flask, render_template, jsonify, request, send_from_directory
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from datetime import datetime, timedelta
+from flask_socketio import SocketIO, emit
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+import os
+import json
+import time
+import threading
 from apscheduler.schedulers.background import BackgroundScheduler
 import ffmpeg
-import threading
 import subprocess
-import os
-import re
 import shutil
 from datetime import datetime
 from werkzeug.utils import secure_filename
@@ -18,6 +22,9 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///streams.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 migrate = Migrate(app, db)
+
+# Inicializar SocketIO
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # Scheduler for managing video broadcasts
 scheduler = BackgroundScheduler()
@@ -250,6 +257,74 @@ def schedule_stream(stream):
         print(f"Error al programar stream: {str(e)}")
         raise
 
+# Clase para manejar eventos del sistema de archivos
+class StreamMonitor(FileSystemEventHandler):
+    def __init__(self):
+        self.active_streams = {}
+        self.lock = threading.Lock()
+
+    def on_created(self, event):
+        if event.is_directory:
+            return
+        if event.src_path.endswith('.flv'):
+            with self.lock:
+                stream_name = os.path.basename(event.src_path)
+                self.active_streams[stream_name] = {
+                    'start_time': datetime.now().isoformat(),
+                    'path': event.src_path,
+                    'size': 0
+                }
+            socketio.emit('stream_started', {'stream': stream_name})
+
+    def on_modified(self, event):
+        if event.is_directory:
+            return
+        if event.src_path.endswith('.flv'):
+            with self.lock:
+                stream_name = os.path.basename(event.src_path)
+                if stream_name in self.active_streams:
+                    size = os.path.getsize(event.src_path)
+                    self.active_streams[stream_name]['size'] = size
+                    socketio.emit('stream_update', {
+                        'stream': stream_name,
+                        'size': size
+                    })
+
+    def on_deleted(self, event):
+        if event.is_directory:
+            return
+        if event.src_path.endswith('.flv'):
+            with self.lock:
+                stream_name = os.path.basename(event.src_path)
+                if stream_name in self.active_streams:
+                    del self.active_streams[stream_name]
+                    socketio.emit('stream_ended', {'stream': stream_name})
+
+    def get_active_streams(self):
+        with self.lock:
+            return dict(self.active_streams)
+
+# Inicializar el monitor
+stream_monitor = StreamMonitor()
+observer = Observer()
+observer.schedule(stream_monitor, os.path.join(app.config['UPLOAD_FOLDER'], 'receiving'), recursive=False)
+observer.start()
+
+# Rutas para el monitoreo
+@app.route('/active_streams')
+def active_streams():
+    streams = stream_monitor.get_active_streams()
+    return jsonify(streams)
+
+@socketio.on('connect')
+def handle_connect():
+    # Enviar lista actual de streams al cliente que se conecta
+    emit('active_streams', stream_monitor.get_active_streams())
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    pass
+
 @app.route('/')
 def index():
     sort_by = request.args.get('sort', 'scheduled_time')  # Por defecto ordena por hora programada
@@ -274,7 +349,12 @@ def index():
             query = query.order_by(Stream.status.asc())
     
     streams = query.all()
-    return render_template('index.html', streams=streams, current_sort=sort_by, current_order=order)
+    active = stream_monitor.get_active_streams()
+    return render_template('index.html', 
+                         streams=streams, 
+                         active_streams=active,
+                         current_sort=sort_by, 
+                         current_order=order)
 
 @app.route('/add_stream', methods=['POST'])
 def add_stream():
@@ -635,6 +715,13 @@ def format_size(size):
         size /= 1024
     return f"{size:.1f} TB"
 
+# Asegurar que el observer se detenga cuando la aplicación se cierre
+import atexit
+@atexit.register
+def cleanup():
+    observer.stop()
+    observer.join()
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
@@ -654,4 +741,4 @@ if __name__ == '__main__':
         # Crear backup inicial
         backup_database()
     
-    app.run(debug=True, port=5001)
+    socketio.run(app, debug=True, host='0.0.0.0', port=8000)
