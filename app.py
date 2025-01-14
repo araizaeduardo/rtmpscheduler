@@ -595,6 +595,39 @@ def play_video(filename):
         return send_from_directory(upload_dir, filename)
     return 'Archivo no encontrado', 404
 
+@app.route('/health')
+def health_check():
+    try:
+        # Verificar la conexión a la base de datos
+        db.session.execute('SELECT 1')
+        
+        # Verificar directorios necesarios
+        upload_dir = os.path.join(app.config['UPLOAD_FOLDER'])
+        if not os.path.exists(upload_dir):
+            return jsonify({
+                'status': 'error',
+                'message': 'Upload directory not found'
+            }), 500
+            
+        # Verificar que nginx está corriendo
+        nginx_status = os.system('pidof nginx > /dev/null')
+        if nginx_status != 0:
+            return jsonify({
+                'status': 'error',
+                'message': 'Nginx not running'
+            }), 500
+            
+        return jsonify({
+            'status': 'healthy',
+            'timestamp': datetime.now().isoformat(),
+            'uptime': os.popen('uptime').read().strip()
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
+
 def format_size(size):
     for unit in ['B', 'KB', 'MB', 'GB']:
         if size < 1024:

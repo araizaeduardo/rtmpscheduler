@@ -224,6 +224,77 @@ sudo supervisorctl restart rtmp-streamer
 sudo supervisorctl update
 ```
 
+## Despliegue con Docker
+
+### Requisitos
+- Docker
+- Docker Compose
+
+### Construcción y Ejecución
+
+1. **Construir y ejecutar con Docker Compose**
+```bash
+# Construir la imagen
+docker-compose build
+
+# Iniciar los servicios
+docker-compose up -d
+
+# Ver logs
+docker-compose logs -f
+```
+
+2. **Comandos útiles**
+```bash
+# Detener servicios
+docker-compose down
+
+# Reiniciar servicios
+docker-compose restart
+
+# Ver estado de los contenedores
+docker-compose ps
+
+# Entrar al contenedor
+docker-compose exec rtmp-streamer bash
+```
+
+3. **Estructura de Volúmenes**
+- `./uploads`: Archivos de video y transmisiones
+- `./instance`: Base de datos SQLite
+
+### Notas de Docker
+
+1. **Puertos expuestos**
+   - 80: Interfaz web
+   - 1935: Servidor RTMP
+   - 8080: Servidor de autenticación
+
+2. **Persistencia**
+   - Los archivos de video se mantienen en `./uploads`
+   - La base de datos se mantiene en `./instance`
+   - Los logs se mantienen dentro del contenedor
+
+3. **Seguridad**
+   - La aplicación corre como usuario www-data
+   - Los puertos pueden cambiarse en docker-compose.yml
+   - Se recomienda usar SSL en producción
+
+4. **Mantenimiento**
+```bash
+# Actualizar la imagen
+docker-compose build --no-cache
+
+# Limpiar volúmenes no usados
+docker volume prune
+
+# Ver logs de Nginx
+docker-compose exec rtmp-streamer tail -f /var/log/nginx/error.log
+
+# Ver logs de la aplicación
+docker-compose exec rtmp-streamer tail -f /var/log/supervisor/rtmp-streamer.log
+```
+
 ## Streaming RTMP
 
 ### Requisitos Adicionales
