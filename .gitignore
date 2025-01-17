@@ -84,3 +84,8 @@ videos/
 
 # Database backups
 backups/
+
+nginx.conf
+streams.db.backups
+
+/instance/*

@@ -235,9 +235,15 @@
             <div class="card-header bg-light">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h5 class="mb-0">Archivos en Upload</h5>
+                        <h5 class="mb-0">
+                            <i class="bi bi-folder me-2"></i>
+                            Archivos Disponibles en Uploads
+                        </h5>
                     </div>
-                    <div>
+                    <div class="d-flex align-items-center">
+                        <button class="btn btn-primary me-3" data-bs-toggle="modal" data-bs-target="#uploadVideoModal">
+                            <i class="bi bi-upload me-2"></i>Subir Video
+                        </button>
                         <span class="text-muted" id="totalSize"></span>
                     </div>
                 </div>
@@ -278,16 +284,54 @@
             </div>
         </div>
 
+        <!-- Modal para subir video -->
+        <div class="modal fade" id="uploadVideoModal" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">Subir Video</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="uploadVideoForm" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="videoFile" class="form-label">Seleccionar Video</label>
+                                <input type="file" class="form-control" id="videoFile" name="video" accept=".mp4,.avi,.mkv,.mov">
+                                <div class="form-text">
+                                    Formatos soportados: MP4, AVI, MKV, MOV
+                                </div>
+                            </div>
+                            <div class="progress mb-3 d-none" id="uploadProgress">
+                                <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                        <button type="button" class="btn btn-primary" onclick="uploadVideo()">Subir</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Resto del contenido -->
-        <div class="row mb-3">
-            <div class="col-auto">
-                <div class="btn-group">
-                    <button type="button" id="gridViewBtn" class="btn btn-outline-secondary" onclick="setView('grid')">
-                        <i class="bi bi-grid"></i> Cuadrícula
-                    </button>
-                    <button type="button" id="listViewBtn" class="btn btn-outline-secondary" onclick="setView('list')">
-                        <i class="bi bi-list-ul"></i> Lista
-                    </button>
+        <div class="row mb-4">
+            <div class="col">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">Streams Programados</h4>
+                    <div class="d-flex align-items-center">
+                        <button class="btn btn-primary me-3" data-bs-toggle="modal" data-bs-target="#addStreamModal">
+                            <i class="bi bi-plus-circle me-2"></i>Agregar Stream
+                        </button>
+                        <div class="view-toggle btn-group">
+                            <button class="btn btn-outline-secondary" onclick="setView('grid')">
+                                <i class="bi bi-grid-3x3-gap"></i>
+                            </button>
+                            <button class="btn btn-outline-secondary" onclick="setView('list')">
+                                <i class="bi bi-list"></i>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -395,7 +439,10 @@
                             </div>
                             <div class="mb-3">
                                 <label for="input_path" class="form-label">Ruta de Entrada (opcional si sube archivo)</label>
-                                <input type="text" class="form-control" id="input_path">
+                                <input type="text" class="form-control" id="input_path" name="input_path">
+                                <div class="form-text">
+                                    Puede usar rutas relativas a la carpeta 'uploads'. Por ejemplo: 'video.mp4' o rutas absolutas como '/ruta/completa/video.mp4'
+                                </div>
                             </div>
                             <div class="mb-3">
                                 <label for="output_rtmp" class="form-label">URL RTMP</label>
@@ -459,6 +506,9 @@
                             <div class="mb-3">
                                 <label for="edit_input_path" class="form-label">Ruta de Entrada</label>
                                 <input type="text" class="form-control" id="edit_input_path">
+                                <div class="form-text">
+                                    Puede usar rutas relativas a la carpeta 'uploads'. Por ejemplo: 'video.mp4' o rutas absolutas como '/ruta/completa/video.mp4'
+                                </div>
                             </div>
                             <div class="mb-3">
                                 <label for="edit_output_rtmp" class="form-label">URL RTMP</label>
@@ -730,44 +780,51 @@
                 setView(preferredView);
             });
 
-            // Función para cargar la lista de archivos
-            function loadFiles() {
-                fetch('/list_files')
-                    .then(response => response.json())
-                    .then(data => {
-                        const tbody = document.getElementById('fileList');
-                        const totalSize = document.getElementById('totalSize');
-                        
-                        // Actualizar el tamaño total
-                        totalSize.textContent = `Espacio total: ${data.total_size}`;
-                        
-                        // Limpiar la tabla
-                        tbody.innerHTML = '';
-                        
-                        // Agregar cada archivo
-                        data.files.forEach(file => {
-                            const isVideo = ['MP4', 'MOV', 'AVI'].includes(file.type);
-                            const row = document.createElement('tr');
-                            row.innerHTML = `
-                                <td>
-                                    <i class="bi bi-file-earmark${getFileIcon(file.type)} me-2"></i>
-                                    ${file.name}
-                                </td>
-                                <td><span class="badge bg-secondary">${file.type}</span></td>
-                                <td>${file.size_formatted}</td>
-                                <td>${file.modified}</td>
-                                <td>
-                                    ${isVideo ? `
-                                        <button class="btn btn-sm btn-primary" onclick="playVideo('${file.name}')">
-                                            <i class="bi bi-play-fill"></i> Reproducir
+            async function loadFiles() {
+                try {
+                    const response = await fetch('/list_files');
+                    const data = await response.json();
+                    
+                    if (data.error) {
+                        console.error('Error:', data.error);
+                        return;
+                    }
+                    
+                    const fileList = document.getElementById('fileList');
+                    fileList.innerHTML = '';
+                    
+                    // Actualizar el tamaño total
+                    document.getElementById('totalSize').textContent = `Espacio total: ${data.total_size}`;
+                    
+                    // Agregar cada archivo a la tabla
+                    data.files.forEach(file => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>
+                                <i class="bi bi-file-earmark-${file.type.toLowerCase() in ['mp4', 'avi', 'mkv', 'mov'] ? 'play' : 'text'} me-2"></i>
+                                ${file.name}
+                            </td>
+                            <td><span class="badge bg-secondary">${file.type}</span></td>
+                            <td>${file.size_formatted}</td>
+                            <td>${file.modified}</td>
+                            <td>
+                                <div class="btn-group">
+                                    ${file.type.toLowerCase() in ['mp4', 'avi', 'mkv', 'mov'] ? `
+                                        <button class="btn btn-sm btn-outline-primary" onclick="playVideo('${file.name}')" title="Reproducir">
+                                            <i class="bi bi-play-fill"></i>
                                         </button>
                                     ` : ''}
-                                </td>
-                            `;
-                            tbody.appendChild(row);
-                        });
-                    })
-                    .catch(error => console.error('Error cargando archivos:', error));
+                                    <button class="btn btn-sm btn-outline-success" onclick="useInNewStream('${file.name}')" title="Usar en nuevo stream">
+                                        <i class="bi bi-plus-circle"></i> Usar
+                                    </button>
+                                </div>
+                            </td>
+                        `;
+                        fileList.appendChild(row);
+                    });
+                } catch (error) {
+                    console.error('Error:', error);
+                }
             }
 
             // Función para determinar el ícono según el tipo de archivo
@@ -801,6 +858,41 @@
                 document.getElementById('videoModal').addEventListener('hidden.bs.modal', function () {
                     videoPlayer.pause();
                     videoPlayer.src = '';
+                });
+            }
+
+            function useInNewStream(filename) {
+                // Abrir el modal de nuevo stream
+                const modal = new bootstrap.Modal(document.getElementById('addStreamModal'));
+                modal.show();
+                
+                // Establecer el nombre del archivo como ruta de entrada
+                document.getElementById('input_path').value = filename;
+                
+                // Sugerir un nombre para el stream basado en el nombre del archivo
+                const suggestedName = filename.split('.')[0].replace(/_/g, ' ');
+                document.getElementById('name').value = suggestedName;
+            }
+
+            function uploadVideo() {
+                const formData = new FormData();
+                formData.append('video', document.getElementById('videoFile').files[0]);
+                
+                fetch('/upload_video', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(data.error);
+                    } else {
+                        location.reload();
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Error al subir video');
                 });
             }
 

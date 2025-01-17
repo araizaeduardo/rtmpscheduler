@@ -24,7 +24,7 @@ db = SQLAlchemy(app)
 migrate = Migrate(app, db)
 
 # Inicializar SocketIO
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
 
 # Scheduler for managing video broadcasts
 scheduler = BackgroundScheduler()
@@ -140,6 +140,12 @@ def calculate_next_run(stream):
         return datetime.combine(next_run.date(), stream.scheduled_time.time())
     return None
 
+def get_absolute_path(relative_path):
+    """Convierte una ruta relativa a absoluta, relativa al directorio de uploads"""
+    if os.path.isabs(relative_path):
+        return relative_path
+    return os.path.join(app.config['UPLOAD_FOLDER'], relative_path)
+
 def stream_video(stream_id):
     """Función que maneja la transmisión del video"""
     with app.app_context():
@@ -159,8 +165,10 @@ def stream_video(stream_id):
             print(f"Tipo de repetición: {stream.repeat_type}")
             print(f"{'='*50}\n")
             
-            if not os.path.exists(stream.input_path):
-                print(f"Error: Archivo de video no encontrado en {stream.input_path}")
+            # Convertir la ruta de entrada a absoluta
+            absolute_input_path = get_absolute_path(stream.input_path)
+            if not os.path.exists(absolute_input_path):
+                print(f"Error: Archivo de video no encontrado en {absolute_input_path}")
                 stream.status = 'error'
                 db.session.commit()
                 return
@@ -171,7 +179,7 @@ def stream_video(stream_id):
             db.session.commit()
             
             # Comando ffmpeg para streaming
-            command = ['ffmpeg', '-re', '-i', stream.input_path]
+            command = ['ffmpeg', '-re', '-i', absolute_input_path]
             # Usar parámetros por defecto si no hay personalizados
             video_params = (stream.video_params or '-c:v copy -c:a aac -f flv').split()
             command.extend(video_params)
@@ -350,11 +358,36 @@ def index():
     
     streams = query.all()
     active = stream_monitor.get_active_streams()
+
+    # Obtener lista de archivos en uploads
+    uploads = []
+    total_size = 0
+    try:
+        for filename in os.listdir(app.config['UPLOAD_FOLDER']):
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            if os.path.isfile(filepath):
+                size = os.path.getsize(filepath)
+                modified = os.path.getmtime(filepath)
+                uploads.append({
+                    'name': filename,
+                    'size': size,
+                    'size_formatted': format_size(size),
+                    'modified': datetime.fromtimestamp(modified).strftime('%Y-%m-%d %H:%M:%S'),
+                    'type': os.path.splitext(filename)[1][1:].upper() or 'FILE'
+                })
+                total_size += size
+    except Exception as e:
+        print(f"Error al listar archivos: {str(e)}")
+        uploads = []
+        total_size = 0
+
     return render_template('index.html', 
                          streams=streams, 
                          active_streams=active,
                          current_sort=sort_by, 
-                         current_order=order)
+                         current_order=order,
+                         uploads=uploads,
+                         total_size=format_size(total_size))
 
 @app.route('/add_stream', methods=['POST'])
 def add_stream():
@@ -390,14 +423,19 @@ def add_stream():
                 unique_filename = f"{uuid.uuid4()}_{filename}"
                 file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
                 file.save(file_path)
-                input_path = file_path
+                input_path = unique_filename  # Guardar solo el nombre del archivo
         
         if not input_path:
             return jsonify({'error': 'Se requiere un archivo de video o una ruta de entrada'}), 400
         
+        # Convertir la ruta de entrada a absoluta si es necesario
+        absolute_input_path = get_absolute_path(input_path)
+        if not os.path.exists(absolute_input_path):
+            return jsonify({'error': 'El archivo de entrada no existe'}), 400
+        
         stream = Stream(
             name=name,
-            input_path=input_path,
+            input_path=input_path,  # Guardamos la ruta relativa en la base de datos
             output_rtmp=output_rtmp,
             scheduled_time=scheduled_time,
             video_params=video_params,
@@ -498,7 +536,7 @@ def edit_stream(stream_id):
                 unique_filename = f"{uuid.uuid4()}_{filename}"
                 file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
                 file.save(file_path)
-                input_path = file_path
+                input_path = unique_filename  # Guardar solo el nombre del archivo
         
         # Actualizar los campos del stream
         stream.name = name
@@ -708,6 +746,36 @@ def health_check():
             'message': str(e)
         }), 500
 
+@app.route('/upload_video', methods=['POST'])
+def upload_video():
+    try:
+        if not ensure_upload_folder():
+            return jsonify({'error': 'No se pudo crear la carpeta de uploads'}), 500
+        
+        if 'video' not in request.files:
+            return jsonify({'error': 'No se envió ningún archivo'}), 400
+            
+        file = request.files['video']
+        if file.filename == '':
+            return jsonify({'error': 'No se seleccionó ningún archivo'}), 400
+            
+        if not allowed_file(file.filename):
+            return jsonify({'error': 'Tipo de archivo no permitido'}), 400
+        
+        filename = secure_filename(file.filename)
+        unique_filename = f"{uuid.uuid4()}_{filename}"
+        file_path = os.path.join(app.config['UPLOAD_FOLDER'], unique_filename)
+        
+        file.save(file_path)
+        
+        return jsonify({
+            'message': 'Video subido exitosamente',
+            'filename': unique_filename
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 def format_size(size):
     for unit in ['B', 'KB', 'MB', 'GB']:
         if size < 1024:
@@ -741,4 +809,4 @@ if __name__ == '__main__':
         # Crear backup inicial
         backup_database()
     
-    socketio.run(app, debug=True, host='0.0.0.0', port=8000)
+    socketio.run(app, debug=True, host='0.0.0.0', port=8000, allow_unsafe_werkzeug=True)
